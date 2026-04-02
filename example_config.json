@@ -1,0 +1,10 @@
+
+
+
+{
+  "subject_id": "patient_001",
+  "subjects_dir": "/data/freesurfer_subjects",
+  "input_type": "dicom",
+  "env_script": "/opt/freesurfer/7.3/SetUpFreeSurfer.sh",
+  "output_dir": "/data/processed"
+}
