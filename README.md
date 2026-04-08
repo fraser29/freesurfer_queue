@@ -67,6 +67,7 @@ cp .env.example .env
 [Unit]
 Description=FreeSurfer Queue Runner
 After=network.target
+RequiresMountsFor=/path/to/queue_root_mount
 
 [Service]
 Type=simple
@@ -95,9 +96,11 @@ journalctl -u freesurfer-queue -f
 ```
 
 Replace `User` and paths with your actual deployment values.
+If `QUEUE_ROOT` is on network storage, set `RequiresMountsFor` to the mount path.
 
 ## Notes
 
 - Runtime settings are loaded from `.env` (`QUEUE_ROOT`, `MAX_RUNTIME`, `POLL_INTERVAL`, `MAX_CONCURRENT`).
+- Set `QUEUE_ROOT_MUST_BE_MOUNT=true` when `QUEUE_ROOT` is a mount point that must be present.
 - Queue service logs are written to `QUEUE_ROOT/queue.log` (and also emitted to console).
 - FreeSurfer is initialized per job via `source "$env_script"` before running `recon-all`.

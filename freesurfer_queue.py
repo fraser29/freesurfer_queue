@@ -15,6 +15,7 @@ QUEUE_ROOT = Path("fs_queue")
 MAX_RUNTIME = 20 * 3600  # seconds
 POLL_INTERVAL = 30  # seconds
 MAX_CONCURRENT = 10
+QUEUE_ROOT_MUST_BE_MOUNT = False
 LOGGER = logging.getLogger("freesurfer_queue")
 
 
@@ -158,6 +159,42 @@ def _parse_env_file(env_path):
     return values
 
 
+def _parse_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _queue_root_error():
+    if not QUEUE_ROOT.exists():
+        return f"Queue root directory {QUEUE_ROOT} does not exist"
+    if not QUEUE_ROOT.is_dir():
+        return f"Queue root path {QUEUE_ROOT} is not a directory"
+    if not os.access(QUEUE_ROOT, os.W_OK | os.X_OK):
+        return f"Queue root directory {QUEUE_ROOT} is not writable"
+    if QUEUE_ROOT_MUST_BE_MOUNT and not QUEUE_ROOT.is_mount():
+        return (
+            f"Queue root {QUEUE_ROOT} is not a mounted filesystem "
+            "(QUEUE_ROOT_MUST_BE_MOUNT=true)"
+        )
+    return None
+
+
+def ensure_queue_root_available(exit_on_error=True):
+    error = _queue_root_error()
+    if not error:
+        return True
+
+    message = f"[CONFIG ERROR] {error}"
+    if LOGGER.handlers:
+        LOGGER.error(message)
+    else:
+        print(message)
+    if exit_on_error:
+        sys.exit(1)
+    return False
+
+
 def load_runtime_settings():
     env_path = Path(".env")
     if not env_path.exists():
@@ -175,28 +212,19 @@ def load_runtime_settings():
         print("See .env.example for required settings.")
         sys.exit(1)
 
-    global QUEUE_ROOT, MAX_RUNTIME, POLL_INTERVAL, MAX_CONCURRENT
+    global QUEUE_ROOT, MAX_RUNTIME, POLL_INTERVAL, MAX_CONCURRENT, QUEUE_ROOT_MUST_BE_MOUNT
     try:
         QUEUE_ROOT = Path(values["QUEUE_ROOT"])
         MAX_RUNTIME = int(values["MAX_RUNTIME"])
         POLL_INTERVAL = int(values["POLL_INTERVAL"])
         MAX_CONCURRENT = int(values["MAX_CONCURRENT"])
+        QUEUE_ROOT_MUST_BE_MOUNT = _parse_bool(values.get("QUEUE_ROOT_MUST_BE_MOUNT"), False)
     except ValueError as exc:
         print(f"[CONFIG ERROR] Invalid numeric value in .env: {exc}")
         print("Expected integers for MAX_RUNTIME, POLL_INTERVAL, and MAX_CONCURRENT.")
         sys.exit(1)
-    
-    if not QUEUE_ROOT.exists():
-        print(f"[CONFIG ERROR] Queue root directory {QUEUE_ROOT} does not exist")
-        sys.exit(1)
-    
-    if not QUEUE_ROOT.is_dir():
-        print(f"[CONFIG ERROR] Queue root directory {QUEUE_ROOT} is not a directory")
-        sys.exit(1)
-    
-    if not QUEUE_ROOT.is_writable():
-        print(f"[CONFIG ERROR] Queue root directory {QUEUE_ROOT} is not writable")
-        sys.exit(1)
+
+    ensure_queue_root_available(exit_on_error=True)
 
 
 def configure_logging():
@@ -222,6 +250,7 @@ def main():
     load_runtime_settings()
     ensure_dirs()
     configure_logging()
+    ensure_queue_root_available(exit_on_error=True)
     LOGGER.info(
         "Queue started: root=%s max_concurrent=%s poll_interval=%ss max_runtime=%ss",
         QUEUE_ROOT,
@@ -232,6 +261,7 @@ def main():
 
     while True:
         try:
+            ensure_queue_root_available(exit_on_error=True)
             check_running_jobs()
             start_jobs_if_possible()
         except Exception as e:
