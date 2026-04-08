@@ -185,6 +185,18 @@ def load_runtime_settings():
         print(f"[CONFIG ERROR] Invalid numeric value in .env: {exc}")
         print("Expected integers for MAX_RUNTIME, POLL_INTERVAL, and MAX_CONCURRENT.")
         sys.exit(1)
+    
+    if not QUEUE_ROOT.exists():
+        print(f"[CONFIG ERROR] Queue root directory {QUEUE_ROOT} does not exist")
+        sys.exit(1)
+    
+    if not QUEUE_ROOT.is_dir():
+        print(f"[CONFIG ERROR] Queue root directory {QUEUE_ROOT} is not a directory")
+        sys.exit(1)
+    
+    if not QUEUE_ROOT.is_writable():
+        print(f"[CONFIG ERROR] Queue root directory {QUEUE_ROOT} is not writable")
+        sys.exit(1)
 
 
 def configure_logging():
