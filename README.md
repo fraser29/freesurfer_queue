@@ -41,6 +41,12 @@ See `example_config.json` for a full example.
 ## Run
 
 ```bash
+cp .env.example .env
+```
+
+Edit `.env` as needed, then start the runner:
+
+```bash
 python freesurfer_queue.py
 ```
 
@@ -48,5 +54,5 @@ The runner continuously polls and schedules queued jobs.
 
 ## Notes
 
-- Concurrency, poll interval, and timeout are set at the top of `freesurfer_queue.py`.
+- Runtime settings are loaded from `.env` (`QUEUE_ROOT`, `MAX_RUNTIME`, `POLL_INTERVAL`, `MAX_CONCURRENT`).
 - FreeSurfer is initialized per job via `source "$env_script"` before running `recon-all`.

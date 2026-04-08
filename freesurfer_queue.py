@@ -4,12 +4,15 @@ import os
 import json
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
+
+# Default runtime settings - can be overridden by .env file
 QUEUE_ROOT = Path("fs_queue")
-MAX_RUNTIME = 20 * 3600  # 20 hours
-POLL_INTERVAL = 30
+MAX_RUNTIME = 20 * 3600  # seconds
+POLL_INTERVAL = 30  # seconds
 MAX_CONCURRENT = 10
 
 
@@ -139,7 +142,51 @@ def ensure_dirs():
         (QUEUE_ROOT / d).mkdir(parents=True, exist_ok=True)
 
 
+def _parse_env_file(env_path):
+    values = {}
+    with open(env_path, "r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def load_runtime_settings():
+    env_path = Path(".env")
+    if not env_path.exists():
+        print("[CONFIG ERROR] Missing .env file in project root.")
+        print("Create it from .env.example and adjust values:")
+        print("  cp .env.example .env")
+        print("  # then edit .env")
+        sys.exit(1)
+
+    values = _parse_env_file(env_path)
+    required = ["QUEUE_ROOT", "MAX_RUNTIME", "POLL_INTERVAL", "MAX_CONCURRENT"]
+    missing = [k for k in required if k not in values or not values[k]]
+    if missing:
+        print(f"[CONFIG ERROR] Missing required .env keys: {', '.join(missing)}")
+        print("See .env.example for required settings.")
+        sys.exit(1)
+
+    global QUEUE_ROOT, MAX_RUNTIME, POLL_INTERVAL, MAX_CONCURRENT
+    try:
+        QUEUE_ROOT = Path(values["QUEUE_ROOT"])
+        MAX_RUNTIME = int(values["MAX_RUNTIME"])
+        POLL_INTERVAL = int(values["POLL_INTERVAL"])
+        MAX_CONCURRENT = int(values["MAX_CONCURRENT"])
+    except ValueError as exc:
+        print(f"[CONFIG ERROR] Invalid numeric value in .env: {exc}")
+        print("Expected integers for MAX_RUNTIME, POLL_INTERVAL, and MAX_CONCURRENT.")
+        sys.exit(1)
+
+
 def main():
+    load_runtime_settings()
     ensure_dirs()
 
     while True:
