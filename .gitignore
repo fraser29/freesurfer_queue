@@ -1,0 +1,19 @@
+# Local environment overrides
+.env
+
+# Queue runtime data
+fs_queue/
+
+# Logs
+*.log
+
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/

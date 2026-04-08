@@ -55,4 +55,5 @@ The runner continuously polls and schedules queued jobs.
 ## Notes
 
 - Runtime settings are loaded from `.env` (`QUEUE_ROOT`, `MAX_RUNTIME`, `POLL_INTERVAL`, `MAX_CONCURRENT`).
+- Queue service logs are written to `QUEUE_ROOT/queue.log` (and also emitted to console).
 - FreeSurfer is initialized per job via `source "$env_script"` before running `recon-all`.

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import time
+import logging
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ QUEUE_ROOT = Path("fs_queue")
 MAX_RUNTIME = 20 * 3600  # seconds
 POLL_INTERVAL = 30  # seconds
 MAX_CONCURRENT = 10
+LOGGER = logging.getLogger("freesurfer_queue")
 
 
 def load_config(job_dir):
@@ -101,18 +103,18 @@ def check_running_jobs():
             alive = False
 
         if not alive:
-            print(f"[DONE] {job_dir.name}")
+            LOGGER.info("[DONE] %s", job_dir.name)
             shutil.move(str(job_dir), QUEUE_ROOT / "done" / job_dir.name)
             continue
 
         # Timeout
         if elapsed > MAX_RUNTIME:
-            print(f"[TIMEOUT] Killing {job_dir.name}")
+            LOGGER.warning("[TIMEOUT] Killing %s", job_dir.name)
 
             try:
                 os.killpg(os.getpgid(pid), 9)
             except Exception as e:
-                print(f"Kill failed: {e}")
+                LOGGER.exception("Kill failed for %s: %s", job_dir.name, e)
 
             shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
 
@@ -133,7 +135,7 @@ def start_jobs_if_possible():
         target = running_dir / job.name
         shutil.move(str(job), target)
 
-        print(f"[START] {job.name}")
+        LOGGER.info("[START] %s", job.name)
         start_job(target)
 
 
@@ -185,16 +187,43 @@ def load_runtime_settings():
         sys.exit(1)
 
 
+def configure_logging():
+    logfile = QUEUE_ROOT / "queue.log"
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+
+    LOGGER.setLevel(logging.INFO)
+    LOGGER.handlers.clear()
+
+    file_handler = logging.FileHandler(logfile, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    LOGGER.addHandler(file_handler)
+    LOGGER.addHandler(stream_handler)
+    LOGGER.propagate = False
+    LOGGER.info("Logging initialized. Writing to %s", logfile)
+
+
 def main():
     load_runtime_settings()
     ensure_dirs()
+    configure_logging()
+    LOGGER.info(
+        "Queue started: root=%s max_concurrent=%s poll_interval=%ss max_runtime=%ss",
+        QUEUE_ROOT,
+        MAX_CONCURRENT,
+        POLL_INTERVAL,
+        MAX_RUNTIME,
+    )
 
     while True:
         try:
             check_running_jobs()
             start_jobs_if_possible()
         except Exception as e:
-            print(f"[ERROR] {e}")
+            LOGGER.exception("[ERROR] Queue loop failure: %s", e)
 
         time.sleep(POLL_INTERVAL)
 
