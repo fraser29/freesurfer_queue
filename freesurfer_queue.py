@@ -22,9 +22,17 @@ def build_command(config, job_dir):
     subject_id = config["subject_id"]
     subjects_dir = Path(config["subjects_dir"])
     input_dir = job_dir / "input"
-    env_script = config["env_script"]
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Input directory {input_dir} does not exist")
 
-    # IMPORTANT: use bash -c so we can source environment
+    if not subjects_dir.exists():
+        raise FileNotFoundError(f"Subjects directory {subjects_dir} does not exist")
+
+    env_script = config["env_script"]
+    if not Path(env_script).exists():
+        raise FileNotFoundError(f"Environment script {env_script} does not exist")
+
+    # use bash -c to source environment
     cmd = f"""
     source "{env_script}" && \
     export SUBJECTS_DIR="{subjects_dir}" && \
