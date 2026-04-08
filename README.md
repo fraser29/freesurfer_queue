@@ -52,6 +52,50 @@ python freesurfer_queue.py
 
 The runner continuously polls and schedules queued jobs.
 
+## Run as Ubuntu service (systemd)
+
+1) Create and edit local runtime config:
+
+```bash
+cd /path/to/freesurfer_queue
+cp .env.example .env
+```
+
+2) Create `/etc/systemd/system/freesurfer-queue.service`:
+
+```ini
+[Unit]
+Description=FreeSurfer Queue Runner
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/path/to/freesurfer_queue
+ExecStart=/usr/bin/python3 /path/to/freesurfer_queue/freesurfer_queue.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3) Reload and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now freesurfer-queue
+```
+
+4) Check status/logs:
+
+```bash
+systemctl status freesurfer-queue
+journalctl -u freesurfer-queue -f
+```
+
+Replace `User` and paths with your actual deployment values.
+
 ## Notes
 
 - Runtime settings are loaded from `.env` (`QUEUE_ROOT`, `MAX_RUNTIME`, `POLL_INTERVAL`, `MAX_CONCURRENT`).
