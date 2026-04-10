@@ -80,6 +80,34 @@ def get_running_jobs():
     return [d for d in running_dir.iterdir() if d.is_dir()]
 
 
+def is_process_alive(pid):
+    """Return True only when a process exists and is not a zombie."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+
+    proc_stat = Path(f"/proc/{pid}/stat")
+    try:
+        with open(proc_stat, "r", encoding="utf-8") as f:
+            stat = f.read()
+    except FileNotFoundError:
+        return False
+    except PermissionError:
+        # If we cannot read proc state, fall back to the signal probe result.
+        return True
+
+    end_comm = stat.rfind(")")
+    if end_comm == -1 or end_comm + 2 >= len(stat):
+        return True
+
+    state = stat[end_comm + 2]
+    return state != "Z"
+
+
 def check_running_jobs():
     running_jobs = get_running_jobs()
 
@@ -96,12 +124,8 @@ def check_running_jobs():
         start_time = meta["start_time"]
         elapsed = time.time() - start_time
 
-        # Check alive
-        try:
-            os.kill(pid, 0)
-            is_running = True
-        except (OSError, ProcessLookupError):
-            is_running = False
+        # Check alive. Treat zombie processes as finished.
+        is_running = is_process_alive(pid)
 
         LOGGER.debug(f"Checking {job_dir.name} is running: {is_running}")
         
