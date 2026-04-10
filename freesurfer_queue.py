@@ -99,29 +99,85 @@ def check_running_jobs():
         # Check alive
         try:
             os.kill(pid, 0)
-            alive = True
-        except OSError:
-            alive = False
+            is_running = True
+        except (OSError, ProcessLookupError):
+            is_running = False
 
-        LOGGER.debug(f"Checking {job_dir.name} is alive: {alive}")
+        LOGGER.debug(f"Checking {job_dir.name} is running: {is_running}")
         
-        if not alive:
-            LOGGER.info(f"[DONE] {job_dir.name} - NOTE - no check on success of failure ")
-            shutil.move(str(job_dir), QUEUE_ROOT / "done" / job_dir.name)
-            LOGGER.info(f"{job_dir.name} moved to done ")
+        if is_running:
+            # Timeout check for running processes
+            if elapsed > MAX_RUNTIME:
+                LOGGER.warning("[TIMEOUT] Killing %s", job_dir.name)
+                try:
+                    os.killpg(os.getpgid(pid), 9)
+                except Exception as e:
+                    LOGGER.exception("Kill failed for %s: %s", job_dir.name, e)
+                shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
+                LOGGER.info(f"{job_dir.name} moved to timeout")
             continue
 
-        # Timeout
-        if elapsed > MAX_RUNTIME:
-            LOGGER.warning("[TIMEOUT] Killing %s", job_dir.name)
-
+        # Process is not running - check if it completed successfully
+        logfile = job_dir / "recon.log"
+        if logfile.exists():
             try:
-                os.killpg(os.getpgid(pid), 9)
+                with open(logfile, 'r') as f:
+                    log_content = f.read()
+                    if 'finished without error' in log_content:
+                        LOGGER.info(f"[DONE] {job_dir.name} - completed successfully")
+                        shutil.move(str(job_dir), QUEUE_ROOT / "done" / job_dir.name)
+                        LOGGER.info(f"{job_dir.name} moved to done")
+                        continue
             except Exception as e:
-                LOGGER.exception("Kill failed for %s: %s", job_dir.name, e)
+                LOGGER.exception(f"Error reading log for {job_dir.name}: {e}")
+        
+        # If process died but no success message, move to failed
+        LOGGER.warning(f"[FAILED] {job_dir.name} - process ended without success")
+        shutil.move(str(job_dir), QUEUE_ROOT / "failed" / job_dir.name)
+        LOGGER.info(f"{job_dir.name} moved to failed")
 
-            shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
-            LOGGER.info(f"{job_dir.name} moved to timeout ")
+# def check_running_jobs():
+#     running_jobs = get_running_jobs()
+
+#     for job_dir in running_jobs:
+#         runtime_file = job_dir / "runtime.json"
+#         if not runtime_file.exists():
+#             LOGGER.debug("No runtime.json for %s", job_dir.name)
+#             continue
+
+#         with open(runtime_file) as f:
+#             meta = json.load(f)
+
+#         pid = meta["pid"]
+#         start_time = meta["start_time"]
+#         elapsed = time.time() - start_time
+
+#         # Check alive
+#         try:
+#             os.kill(pid, 0)
+#             alive = True
+#         except OSError:
+#             alive = False
+
+#         LOGGER.debug(f"Checking {job_dir.name} is alive: {alive}")
+        
+#         if not alive:
+#             LOGGER.info(f"[DONE] {job_dir.name} - NOTE - no check on success of failure ")
+#             shutil.move(str(job_dir), QUEUE_ROOT / "done" / job_dir.name)
+#             LOGGER.info(f"{job_dir.name} moved to done ")
+#             continue
+
+#         # Timeout
+#         if elapsed > MAX_RUNTIME:
+#             LOGGER.warning("[TIMEOUT] Killing %s", job_dir.name)
+
+#             try:
+#                 os.killpg(os.getpgid(pid), 9)
+#             except Exception as e:
+#                 LOGGER.exception("Kill failed for %s: %s", job_dir.name, e)
+
+#             shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
+#             LOGGER.info(f"{job_dir.name} moved to timeout ")
 
 # TODO
 """
