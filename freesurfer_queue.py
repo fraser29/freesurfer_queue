@@ -17,7 +17,7 @@ POLL_INTERVAL = 30  # seconds
 MAX_CONCURRENT = 10
 QUEUE_ROOT_MUST_BE_MOUNT = False
 LOGGER = logging.getLogger("freesurfer_queue")
-
+LOGLEVEL = "INFO"
 
 def load_config(job_dir):
     with open(job_dir / "config.json") as f:
@@ -86,6 +86,7 @@ def check_running_jobs():
     for job_dir in running_jobs:
         runtime_file = job_dir / "runtime.json"
         if not runtime_file.exists():
+            LOGGER.debug("No runtime.json for %s", job_dir.name)
             continue
 
         with open(runtime_file) as f:
@@ -102,9 +103,12 @@ def check_running_jobs():
         except OSError:
             alive = False
 
+        LOGGER.debug(f"Checking {job_dir.name} is alive: {alive}")
+        
         if not alive:
-            LOGGER.info("[DONE] %s", job_dir.name)
+            LOGGER.info(f"[DONE] {job_dir.name} - NOTE - no check on success of failure ")
             shutil.move(str(job_dir), QUEUE_ROOT / "done" / job_dir.name)
+            LOGGER.info(f"{job_dir.name} moved to done ")
             continue
 
         # Timeout
@@ -117,10 +121,10 @@ def check_running_jobs():
                 LOGGER.exception("Kill failed for %s: %s", job_dir.name, e)
 
             shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
+            LOGGER.info(f"{job_dir.name} moved to timeout ")
 
 # TODO
 """
-the check alive doesn't seem to work. the os.kill above should be correct. 
 no check if complete or failed - if not alive - check is complete - standard line in fs: 
 
 Started at Thu 9 Apr 17:40:43 CEST 2026
@@ -229,13 +233,14 @@ def load_runtime_settings():
         print("See .env.example for required settings.")
         sys.exit(1)
 
-    global QUEUE_ROOT, MAX_RUNTIME, POLL_INTERVAL, MAX_CONCURRENT, QUEUE_ROOT_MUST_BE_MOUNT
+    global QUEUE_ROOT, MAX_RUNTIME, POLL_INTERVAL, MAX_CONCURRENT, QUEUE_ROOT_MUST_BE_MOUNT, LOGLEVEL
     try:
         QUEUE_ROOT = Path(values["QUEUE_ROOT"])
         MAX_RUNTIME = int(values["MAX_RUNTIME"])
         POLL_INTERVAL = int(values["POLL_INTERVAL"])
         MAX_CONCURRENT = int(values["MAX_CONCURRENT"])
         QUEUE_ROOT_MUST_BE_MOUNT = _parse_bool(values.get("QUEUE_ROOT_MUST_BE_MOUNT"), False)
+        LOGLEVEL = values.get("LOGLEVEL", "INFO")
     except ValueError as exc:
         print(f"[CONFIG ERROR] Invalid numeric value in .env: {exc}")
         print("Expected integers for MAX_RUNTIME, POLL_INTERVAL, and MAX_CONCURRENT.")
@@ -248,7 +253,7 @@ def configure_logging():
     logfile = QUEUE_ROOT / "freesurfer_queue.log"
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
-    LOGGER.setLevel(logging.INFO)
+    LOGGER.setLevel(LOGLEVEL)
     LOGGER.handlers.clear()
 
     file_handler = logging.FileHandler(logfile, encoding="utf-8")
@@ -261,6 +266,7 @@ def configure_logging():
     LOGGER.addHandler(stream_handler)
     LOGGER.propagate = False
     LOGGER.info("Logging initialized. Writing to %s", logfile)
+    LOGGER.debug("Logging level is DEBUG - expect a high output")
 
 
 def main():
