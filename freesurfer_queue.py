@@ -26,13 +26,13 @@ def load_config(job_dir):
 
 def build_command(config, job_dir):
     subject_id = config["subject_id"]
-    subjects_dir = Path(config["subjects_dir"])
     input_dir = job_dir / "input"
     if not input_dir.exists():
         raise FileNotFoundError(f"Input directory {input_dir} does not exist")
-
-    if not subjects_dir.exists():
-        raise FileNotFoundError(f"Subjects directory {subjects_dir} does not exist")
+    file_list = os.listdir(input_dir)
+    if len(file_list) == 0:
+        raise FileNotFoundError(f"Input directory {input_dir} is empty")
+    input_file = os.path.join(input_dir, file_list[0])
 
     env_script = config["env_script"]
     if not Path(env_script).exists():
@@ -41,8 +41,7 @@ def build_command(config, job_dir):
     # use bash -c to source environment
     cmd = f"""
     source "{env_script}" && \
-    export SUBJECTS_DIR="{subjects_dir}" && \
-    recon-all -i "{input_dir}" -s "{subject_id}" -all
+    recon-all -i "{input_file}" -s "{subject_id}" -all
     """
 
     return ["bash", "-c", cmd]
@@ -119,6 +118,22 @@ def check_running_jobs():
 
             shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
 
+# TODO
+"""
+the check alive doesn't seem to work. the os.kill above should be correct. 
+no check if complete or failed - if not alive - check is complete - standard line in fs: 
+
+Started at Thu 9 Apr 17:40:43 CEST 2026
+Ended   at Fri 10 Apr 01:26:05 CEST 2026
+#@#%# recon-all-run-time-hours 7.756
+recon-all -s subj_test_fraser finished without error at Fri 10 Apr 01:26:05 CEST 2026
+done
+
+then move to done, else in failed. 
+
+
+"""
+
 
 def start_jobs_if_possible():
     queued_dir = QUEUE_ROOT / "queued"
@@ -131,6 +146,8 @@ def start_jobs_if_possible():
         return
 
     jobs = sorted([d for d in queued_dir.iterdir() if d.is_dir()])
+    # Only if config file exists
+    jobs = [i for i in jobs if "config.json" in os.listdir(i)]
 
     for job in jobs[:available_slots]:
         target = running_dir / job.name
@@ -228,7 +245,7 @@ def load_runtime_settings():
 
 
 def configure_logging():
-    logfile = QUEUE_ROOT / "queue.log"
+    logfile = QUEUE_ROOT / "freesurfer_queue.log"
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
     LOGGER.setLevel(logging.INFO)
@@ -260,6 +277,9 @@ def main():
     )
 
     while True:
+        if os.path.isfile(os.path.join(QUEUE_ROOT, "kill_fs_queue")):
+            LOGGER.info("FOUND KILL FILE - EXITING" ) 
+            break
         try:
             ensure_queue_root_available(exit_on_error=True)
             check_running_jobs()
