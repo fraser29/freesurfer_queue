@@ -43,7 +43,6 @@ def build_command(config, job_dir):
     source "{env_script}" && \
     recon-all -i "{input_file}" -s "{subject_id}" -all
     """
-
     return ["bash", "-c", cmd]
 
 
@@ -84,12 +83,10 @@ def is_process_alive(pid):
     """Return True only when a process exists and is not a zombie."""
     if not isinstance(pid, int) or pid <= 0:
         return False
-
     try:
         os.kill(pid, 0)
     except (OSError, ProcessLookupError):
         return False
-
     proc_stat = Path(f"/proc/{pid}/stat")
     try:
         with open(proc_stat, "r", encoding="utf-8") as f:
@@ -99,36 +96,28 @@ def is_process_alive(pid):
     except PermissionError:
         # If we cannot read proc state, fall back to the signal probe result.
         return True
-
     end_comm = stat.rfind(")")
     if end_comm == -1 or end_comm + 2 >= len(stat):
         return True
-
     state = stat[end_comm + 2]
     return state != "Z"
 
 
 def check_running_jobs():
     running_jobs = get_running_jobs()
-
     for job_dir in running_jobs:
         runtime_file = job_dir / "runtime.json"
         if not runtime_file.exists():
             LOGGER.debug("No runtime.json for %s", job_dir.name)
             continue
-
         with open(runtime_file) as f:
             meta = json.load(f)
-
         pid = meta["pid"]
         start_time = meta["start_time"]
         elapsed = time.time() - start_time
-
         # Check alive. Treat zombie processes as finished.
         is_running = is_process_alive(pid)
-
         LOGGER.debug(f"Checking {job_dir.name} is running: {is_running}")
-        
         if is_running:
             # Timeout check for running processes
             if elapsed > MAX_RUNTIME:
@@ -140,7 +129,6 @@ def check_running_jobs():
                 shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
                 LOGGER.info(f"{job_dir.name} moved to timeout")
             continue
-
         # Process is not running - check if it completed successfully
         logfile = job_dir / "recon.log"
         if logfile.exists():
@@ -154,69 +142,10 @@ def check_running_jobs():
                         continue
             except Exception as e:
                 LOGGER.exception(f"Error reading log for {job_dir.name}: {e}")
-        
         # If process died but no success message, move to failed
         LOGGER.warning(f"[FAILED] {job_dir.name} - process ended without success")
         shutil.move(str(job_dir), QUEUE_ROOT / "failed" / job_dir.name)
         LOGGER.info(f"{job_dir.name} moved to failed")
-
-# def check_running_jobs():
-#     running_jobs = get_running_jobs()
-
-#     for job_dir in running_jobs:
-#         runtime_file = job_dir / "runtime.json"
-#         if not runtime_file.exists():
-#             LOGGER.debug("No runtime.json for %s", job_dir.name)
-#             continue
-
-#         with open(runtime_file) as f:
-#             meta = json.load(f)
-
-#         pid = meta["pid"]
-#         start_time = meta["start_time"]
-#         elapsed = time.time() - start_time
-
-#         # Check alive
-#         try:
-#             os.kill(pid, 0)
-#             alive = True
-#         except OSError:
-#             alive = False
-
-#         LOGGER.debug(f"Checking {job_dir.name} is alive: {alive}")
-        
-#         if not alive:
-#             LOGGER.info(f"[DONE] {job_dir.name} - NOTE - no check on success of failure ")
-#             shutil.move(str(job_dir), QUEUE_ROOT / "done" / job_dir.name)
-#             LOGGER.info(f"{job_dir.name} moved to done ")
-#             continue
-
-#         # Timeout
-#         if elapsed > MAX_RUNTIME:
-#             LOGGER.warning("[TIMEOUT] Killing %s", job_dir.name)
-
-#             try:
-#                 os.killpg(os.getpgid(pid), 9)
-#             except Exception as e:
-#                 LOGGER.exception("Kill failed for %s: %s", job_dir.name, e)
-
-#             shutil.move(str(job_dir), QUEUE_ROOT / "timeout" / job_dir.name)
-#             LOGGER.info(f"{job_dir.name} moved to timeout ")
-
-# TODO
-"""
-no check if complete or failed - if not alive - check is complete - standard line in fs: 
-
-Started at Thu 9 Apr 17:40:43 CEST 2026
-Ended   at Fri 10 Apr 01:26:05 CEST 2026
-#@#%# recon-all-run-time-hours 7.756
-recon-all -s subj_test_fraser finished without error at Fri 10 Apr 01:26:05 CEST 2026
-done
-
-then move to done, else in failed. 
-
-
-"""
 
 
 def start_jobs_if_possible():
